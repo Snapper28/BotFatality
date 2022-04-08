@@ -65,7 +65,9 @@ namespace BotFatality.System
 
                 if (d != "")
                 {
+#pragma warning disable CS8601 // Possible null reference assignment.
                     tickets = Newtonsoft.Json.JsonConvert.DeserializeObject<List<TicketData>>(d);
+#pragma warning restore CS8601 // Possible null reference assignment.
                 }
             }catch (Exception ex)
             {
@@ -136,6 +138,120 @@ namespace BotFatality.System
             return null;
         }
 
+        public static string GetStatus(TicketData ticket)
+        {
+            if (ticket.ticketStatus == Status.pending)
+            {
+                return "En attente";
+            }
+            else if (ticket.ticketStatus == Status.taken)
+            {
+                return $"Pris par {ticket.staffID}";
+            }
+            else
+            {
+                return "Fermeé";
+            }
+        }
+
+        public static async Task<string> GetStaff(TicketData ticket, IMessageChannel channel)
+        {
+            if(ticket.staffID == 0)
+            {
+                return "Aucun";
+            }
+            else
+            {
+                var s = await channel.GetUserAsync(ticket.staffID);
+                if(s != null)
+                {
+                    return s.Mention;
+                }
+                else
+                {
+                    return "Impossible de trouver le staff. Il a probablement plus sont grade";
+                }
+            }
+        }
+        public static async Task<string> GetUser(TicketData ticket, IMessageChannel channel)
+        {
+            var s = await channel.GetUserAsync(ticket.userID);
+
+            if (s != null)
+            {
+                return s.Mention;
+            }
+            else
+            {
+                return "Impossible de trouver le joueur. Il a probablement plus les access au ticket";
+            }
+        }
+        public static async Task<string> GetUserName(TicketData ticket, IMessageChannel channel)
+        {
+            var s = await channel.GetUserAsync(ticket.userID);
+
+            if (s != null)
+            {
+                return s.Username;
+            }
+            else
+            {
+                return "Impossible de trouver le joueur. Il a probablement plus les access au ticket";
+            }
+        }
+        public static async Task TicketClose(SocketSlashCommand cmd)
+        {
+            var c = await cmd.GetChannelAsync();
+            if (!c.Name.Contains("logs"))
+            {
+                var staffRole = Bot.guild.GetRole(942507484982157402);
+                if (((SocketGuildUser)cmd.User).Roles.Contains(staffRole))
+                {
+
+                    TicketData ticket = GetTicket(GetInt(c.Name).Value);
+                    var us = ticket.userID;
+                    if(us != 0)
+                    {
+                        var u = await c.GetUserAsync(ticket.userID);
+                        if (cmd.User == u)
+                        {
+                            await u.SendMessageAsync($"Vous avez fermé votre ticket (ID: {ticket.ticketID})\nSi vous avez d'autres questions n'hesitez pas a faire un autre ticket");
+                        }
+                        else
+                        {
+                            await u.SendMessageAsync($"Votre ticket(ID: {ticket.ticketID}) a été fermé par un membre du staff\nSi vous avez d'autres questions n'hesitez pas a faire un autre ticket");
+                        }
+                    }
+                    else
+                    {
+
+                    }
+
+                    await cmd.DeferAsync();
+
+                    await Bot.guild.GetTextChannel(c.Id).ModifyAsync(p => { p.Name = $"logs-{ticket.ticketType}-{ticket.ticketID}"; p.CategoryId = 961902889553514536; });
+
+                    ticket.ticketStatus = Status.closed;
+
+                    await c.SendMessageAsync($"Le ticket a été fermée par {cmd.User.Mention}");
+
+                    await cmd.RespondAsync($"{cmd.User.Mention}, Vous avez fermée le ticket. N'oubliez pas d'enlever les joueurs avec */remove*", ephemeral: true);
+                }
+                else
+                {
+                    await cmd.RespondAsync("Vous n'êtes pas un membre du staff");
+                }
+            }
+            else if (!c.Name.Contains("ticket") && !c.Name.Contains("traitement"))
+            {
+                await cmd.RespondAsync("Vous n'êtes pas dans le bon salon", ephemeral: true);
+            }
+            else
+            {
+                await cmd.RespondAsync("Ce ticket est deja fermee", ephemeral: true);
+            }
+        }
+
         public static async Task TakeTicket(SocketSlashCommand cmd)
         {
             var c = await cmd.GetChannelAsync();
@@ -168,6 +284,7 @@ namespace BotFatality.System
                     ticket.staffID = cmd.User.Id;
                     ticket.ticketStatus = Status.taken;
 
+                    await cmd.DeferAsync();
                     await SaveData();
 
                 }
@@ -197,18 +314,23 @@ namespace BotFatality.System
                 {
 
                     var ticket = GetTicket((GetInt(c.Name).Value));
-                    
-                    var embed = new EmbedBuilder()
-                    .WithTitle($"Information du ticket de {(await c.GetUserAsync(ticket.userID)).Mention} ID: {ticket.ticketID}")
-                    .AddField("Nom IG", ticket.NameIG, true)
-                    .AddField("Type", ticket.ticketType, true)
-                    .AddField("Problème", ticket.ticketIssue, false)
-                    .AddField("Autre informations", ticket.ticketOtherInfo, false)
-                    .WithColor(Color.Blue)
-                    .WithCurrentTimestamp()
-                    .Build();
+
+                    var e = new EmbedBuilder();
+                        e.WithTitle($"Information du ticket de {await GetUserName(ticket, c)} ID: {ticket.ticketID}");
+                        e.AddField("Nom IG", ticket.NameIG, true);
+                        e.AddField("Type", ticket.ticketType, true);
+                        e.AddField("Problème", ticket.ticketIssue, false);
+                        e.AddField("Autre informations", ticket.ticketOtherInfo, false);
+                        e.AddField("Statut", GetStatus(ticket), true);
+                        e.AddField("Staff", await GetStaff(ticket, c), true);
+                        e.AddField("Mention du Joueur", await GetUser(ticket, c), false);
+                        e.AddField("Date", ticket.ticketDate, false);
+                        e.WithColor(Color.Blue);
+
+                    var embed = e.Build();
 
                     await cmd.RespondAsync(embed: embed, ephemeral: true);
+
                 }
                 else
                 {
@@ -224,7 +346,7 @@ namespace BotFatality.System
         public static async Task AddPlayer(SocketSlashCommand cmd)
         {
             var c = await cmd.GetChannelAsync();
-            if (c.Name.Contains("ticket"))
+            if (c.Name.Contains("ticket") || c.Name.Contains("traitement"))
             {
                 var staffRole = Bot.guild.GetRole(942507484982157402);
 
@@ -247,7 +369,7 @@ namespace BotFatality.System
         public static async Task RemovePlayer(SocketSlashCommand cmd)
         {
             var c = await cmd.GetChannelAsync();
-            if (c.Name.Contains("ticket"))
+            if (c.Name.Contains("ticket") || c.Name.Contains("traitement") || c.Name.Contains("logs"))
             {
                 var staffRole = Bot.guild.GetRole(942507484982157402);
 

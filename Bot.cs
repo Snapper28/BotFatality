@@ -53,12 +53,13 @@ namespace BotFatality
             var ticket_cmd = new SlashCommandBuilder();
 
             guild = _client.GetGuild(908091527539097601);
-
+            #region Ticket
             ticket_cmd.WithName("ticket");
 
             ticket_cmd.WithDescription("Créer un ticket pour avoir l'asssistance d'un membre du staff");
+            #endregion
             #region AddPlayer
-                var addOption = new SlashCommandOptionBuilder()
+            var addOption = new SlashCommandOptionBuilder()
                     .WithName("joueur")
                     .WithDescription("Le membre à ajouter au ticket")
                     .WithRequired(true)
@@ -82,6 +83,7 @@ namespace BotFatality
                    .WithDescription("Retirer un membre du ticket. Seules les staffs ont accès à cette commande")
                    .AddOption(removeOption);
             #endregion
+            #region TakeTicket
             var takeOption = new SlashCommandOptionBuilder()
                 .WithName("prevenir")
                 .WithDescription("Prevenir le joueur que le ticket est en cours de traitement ?")
@@ -93,12 +95,18 @@ namespace BotFatality
                .WithName("take")
                .WithDescription("Prendre le ticket. Seules les staffs ont accès à cette commande")
                .AddOption(takeOption);
-
-
+            #endregion
+            #region TicketInfo
             var ticket_info = new SlashCommandBuilder()
-               .WithName("ticketinfo")
+               .WithName("info")
                .WithDescription("Avoir les info du ticket. Seules les staffs ont accès à cette commande");
+            #endregion
 
+            #region TicketClose
+            var ticket_close = new SlashCommandBuilder()
+               .WithName("close")
+               .WithDescription("Fermer ticket");
+            #endregion
             try
             {
                 // Now that we have our builder, we can call the CreateApplicationCommandAsync method to make our slash command.
@@ -106,6 +114,8 @@ namespace BotFatality
                 await _client.CreateGlobalApplicationCommandAsync(ticket_add.Build());
                 await _client.CreateGlobalApplicationCommandAsync(ticket_remove.Build());
                 await _client.CreateGlobalApplicationCommandAsync(ticket_take.Build());
+                await _client.CreateGlobalApplicationCommandAsync(ticket_info.Build());
+                await _client.CreateGlobalApplicationCommandAsync(ticket_close.Build());
                 await Ticket.InitSystem();
 
             }
@@ -139,6 +149,10 @@ namespace BotFatality
             if (command.Data.Name == "info")
             {
                 await Ticket.TicketInfo(command);
+            }
+            if (command.Data.Name == "close")
+            {
+                await Ticket.TicketClose(command);
             }
         }
 

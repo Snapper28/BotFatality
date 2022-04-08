@@ -17,7 +17,7 @@ namespace BotFatality.System
     [Serializable]
     public class TicketData
     {
-        public ulong userID;
+        public ulong userID = 0;
 
         public int ticketID;
 
@@ -28,7 +28,7 @@ namespace BotFatality.System
 
         public Status ticketStatus;
 
-        public ulong staffID;
+        public ulong staffID = 0;
 
         public DateTime ticketDate;
     }
